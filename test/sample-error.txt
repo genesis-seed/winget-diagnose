@@ -1,0 +1,5 @@
+  找到了该包，正在尝试下载...
+  下载失败
+  发生错误: 0x8A150008 (APPINSTALLER_CLI_ERROR_DOWNLOAD_FAILED)
+  另一个安装失败: 0x8A150049 MSI_INSTALL_FAILED, exit code: 1603
+  [TEST] 合成测试样本：另含知识库未收录码 0x801901F7 与 MSI 1618

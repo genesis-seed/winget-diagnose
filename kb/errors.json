@@ -1,0 +1,251 @@
+{
+  "_meta": {
+    "name": "winget-diagnose knowledge base",
+    "version": "0.2.0",
+    "updated": "2026-10-20",
+    "real_failures_replayed": "2026-10-20 四例真实失败回灌验证（见 test/real-0*.txt）：装不存在包=0x8A150014、升未装包=同码（先于 UPDATE_NOT_APPLICABLE 在搜索阶段报）、升已最新包=0x8A15002B、Tencent.QQ 404=0x80190194",
+    "grading": {
+      "A": "一手实测：作者机器上踩过并解决（日期见 source）",
+      "B": "官方文档或 ≥2 个独立可信来源一致",
+      "C": "单一来源或推断，待验证；使用时请当线索不当结论"
+    },
+    "note": "本知识库不追求穷举。官方完整错误码表请运行 winget error --output <file> 自行生成（版本匹配、永远准确）；这里只收『错误码之外的因果与动作』。"
+  },
+  "entries": [
+    {
+      "code": "0x8A150008",
+      "symbol": "APPINSTALLER_CLI_ERROR_DOWNLOAD_FAILED",
+      "official": "Downloading installer failed",
+      "symptom": "安装包下载失败。中国网络环境下最常见的一类：winget 对系统代理/隧道的遵从不可靠。",
+      "causes": [
+        "安装包托管在 github.com / objects.githubusercontent.com，直连被掐或超时（winget 通常不走你开的代理/隧道）",
+        "上游 URL 已 404（见 0x80190194 条目：install 路径常把原始 HTTP 码包进此码不露）",
+        "安装源 CDN 临时故障",
+        "DNS 污染导致解析到不可达地址"
+      ],
+      "actions": [
+        "确认是哪个域下载失败：用 winget install --verbose-logs 重跑，日志里有完整 URL（见官方 troubleshooting：winget --info 可查日志路径）",
+        "若托管在 github.com：临时配置可用的代理，或手动下载安装包后用 winget install --manifest 本地安装（需先 winget settings --enable LocalManifestFiles，管理员）",
+        "换网络环境（手机热点）重试以区分『包的问题』还是『路的问题』"
+      ],
+      "evidence": "A",
+      "source": "本机实测 2026-10-18：winget install GitHub.cli 因安装包在 github.com 报 502，机器开着隧道但 winget 不走"
+    },
+    {
+      "code": "0x80190193",
+      "symbol": "HTTP 403 (WinHTTP 映射)",
+      "official": "winget error 可能不识别此码（非 APPINSTALLER 前缀）",
+      "symptom": "下载阶段被服务器拒绝。官方 troubleshooting 专文解释：ISV 主动屏蔽了 winget 的 User-Agent。",
+      "causes": [
+        "ISV 服务器检测 User-Agent，浏览器可下、winget 不行（官方文档确认此机制）",
+        "WAF/反爬对数据中心 IP 段拦截"
+      ],
+      "actions": [
+        "浏览器下载同一 URL 验证是否 UA 屏蔽",
+        "若浏览器可行：手动下载 + winget install --manifest 本地安装",
+        "到该包在 winget-pkgs 仓库的 issue 区报告（维护者可能换下载源）"
+      ],
+      "evidence": "B",
+      "source": "learn.microsoft.com/windows/package-manager/winget/troubleshooting 『403 Forbidden error』专节"
+    },
+    {
+      "code": "0x80190194",
+      "symbol": "HTTP 404 (WinHTTP 映射)",
+      "official": "winget download 命令会直接显示此码；install 路径可能包一层 0x8A150008 不露原码",
+      "symptom": "下载 URL 已失效。",
+      "causes": [
+        "上游发布新版本后删除/移动了旧安装包，manifest 未同步",
+        "manifest 中的 InstallerUrl 手写错误",
+        "上游 CDN 策略变更导致旧路径下线"
+      ],
+      "actions": [
+        "到 winget-pkgs 仓库搜该包名的 issue，多半已有人报『InstallerUrl is 404』；没有就发一个（附 winget --info 版本与完整 URL）",
+        "等待社区更新 manifest，或本地 manifest 指向新版本 URL 自装",
+        "重试意义不大：404 是确定态，不像 502/503 会自己好"
+      ],
+      "evidence": "A",
+      "source": "一手实测 2026-10-20：winget download Tencent.QQ 9.7.23.29392 → 0x80190194，URL https://dldir1v6.qq.com/.../QQ9.7.23.29392.exe 实测 404，对应 winget-pkgs issue #379191（仍 open）；HTTP 映射为官方通用知识"
+    },
+    {
+      "code": "0x8A150011",
+      "symbol": "APPINSTALLER_CLI_ERROR_INSTALLER_HASH_MISMATCH",
+      "official": "The installer file's hash does not match the manifest",
+      "symptom": "下载的安装包与 manifest 里的 InstallerSha256 不符。",
+      "causes": [
+        "下载被劫持或 CDN 污染（同一 URL 拿到了不同内容）",
+        "上游换包未同步 manifest",
+        "代理/防火墙对下载内容做了注入（如强制门户、企业中间盒）"
+      ],
+      "actions": [
+        "先重试一次排除偶发损坏",
+        "换网络环境重试；若稳定复现，手动下载后自行核对官方公布的 SHA256 再本地安装",
+        "安全考虑：哈希不匹配也可能是供应链攻击信号，不建议无条件忽略"
+      ],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义 + winget-cli issue 区多例"
+    },
+    {
+      "code": "0x8A150019",
+      "symbol": "APPINSTALLER_CLI_ERROR_COMMAND_REQUIRES_ADMIN",
+      "official": "Command requires administrator privileges to run",
+      "symptom": "命令需要管理员权限。",
+      "causes": ["machine 范围安装未提权", "修改系统级配置（如启用 LocalManifestFiles）未提权"],
+      "actions": [
+        "用管理员身份重开终端重跑",
+        "或加装 --scope user（仅当该包支持 user 范围；EXE 安装器的 scope 支持不一致，见官方 troubleshooting『Scope』节）"
+      ],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义"
+    },
+    {
+      "code": "0x8A150056",
+      "symbol": "APPINSTALLER_CLI_ERROR_INSTALLER_PROHIBITS_ELEVATION",
+      "official": "The installer cannot be run from an administrator context.",
+      "symptom": "与直觉相反：这个错误是『不许』在管理员上下文运行，不是『需要』管理员。",
+      "causes": ["安装器自身声明禁止提权（常见于 per-user 安装器）"],
+      "actions": ["退出管理员终端，用普通权限重跑；或显式 --scope user"],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义"
+    },
+    {
+      "code": "0x8A15007D",
+      "symbol": "APPINSTALLER_CLI_ERROR_ADMIN_CONTEXT_ACTION_PROHIBITED",
+      "official": "The requested operation is not permitted from an administrator context on packages installed within the user scope.",
+      "symptom": "对 user 范围安装的包做操作时正处于管理员上下文。",
+      "causes": ["包以 user 范围安装，操作却以管理员身份发起"],
+      "actions": ["换普通权限终端重跑"],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义"
+    },
+    {
+      "code": "0x8A150061",
+      "symbol": "APPINSTALLER_CLI_ERROR_PACKAGE_ALREADY_INSTALLED",
+      "official": "Found at least one version of the package installed.",
+      "symptom": "检测到已安装同包。",
+      "causes": ["ARP 注册表里已有该包（版本检测按注册表 DisplayVersion）", "同名不同 publisher 的旧安装"],
+      "actions": ["winget list 先看已装版本", "要重装：winget uninstall 后再装，或 winget install --force（自担风险）"],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义"
+    },
+    {
+      "code": "MSI-1603",
+      "symbol": "ERROR_INSTALL_FAILURE (Windows Installer)",
+      "official": "winget error 1603 可本地解码",
+      "symptom": "MSI 安装器内部致命错误。winget 会包一层 0x8A150049 MSI_INSTALL_FAILED，真实码在输出/日志里。",
+      "causes": [
+        "权限不足（写 Program Files / 注册表）",
+        "旧版本残留/安装中断的缓存损坏",
+        "自定义 action 失败（安装器脚本层面，winget 无法控制）"
+      ],
+      "actions": [
+        "管理员重试",
+        "开 MSI 详细日志：msiexec /i <pkg> /L*V <log.txt>（若能取出 MSI 参数）",
+        "查 Windows Installer 自身日志 %TEMP% 下的 MSI*.LOG"
+      ],
+      "evidence": "B",
+      "source": "Windows Installer 标准退出码，官方 `winget error` 命令支持解码"
+    },
+    {
+      "code": "MSI-1618",
+      "symbol": "ERROR_INSTALL_ALREADY_RUNNING",
+      "official": "winget error 1618 可本地解码",
+      "symptom": "另一个安装正在进行。",
+      "causes": ["Windows Installer 互斥：别的 msiexec 在跑（可能是 Windows Update 或商店后台）"],
+      "actions": ["等待几分钟后重试；任务管理器确认无 msiexec 进程"],
+      "evidence": "B",
+      "source": "Windows Installer 标准退出码"
+    },
+    {
+      "code": "0x8A150010",
+      "symbol": "APPINSTALLER_CLI_ERROR_NO_APPLICABLE_INSTALLER",
+      "official": "None of the installers are applicable for the current system",
+      "symptom": "manifest 里没有适配当前系统的安装器。",
+      "causes": [
+        "架构不匹配（如只有 x64 安装器，你在 ARM64 上）",
+        "OS 版本低于安装器 MinOSVersion",
+        "该包从未支持你的 Windows 版本"
+      ],
+      "actions": [
+        "winget show <pkg> 看支持的架构与版本",
+        "去上游官网手动下载（可能有 winget manifest 未覆盖的安装器变体）"
+      ],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义"
+    },
+    {
+      "code": "0x8A150014",
+      "symbol": "APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND",
+      "official": "No packages found",
+      "symptom": "搜不到包。",
+      "causes": ["包名拼写/别名不对", "源索引过期", "该包在你所用源中不存在（msstore 与 winget 源覆盖不同）"],
+      "actions": [
+        "winget source update 刷新索引后重搜",
+        "winget search 用关键词模糊搜，确认正确 ID",
+        "指定 --source winget 或 --source msstore 分别试"
+      ],
+      "evidence": "B",
+      "source": "官方 returnCodes 定义 + 源机制文档"
+    },
+    {
+      "code": "0x801901F6",
+      "symbol": "HTTP 502/503 (WinHTTP 映射)",
+      "official": "0x801901F7 已由本机 winget error 官方解码为 'Service unavailable (503)'；F6=502 为同族推断",
+      "symptom": "下载域网关错误。",
+      "causes": ["CDN/上游临时故障", "本地代理返回的错误页被当成下载响应"],
+      "actions": ["先重试；持续失败时用 --verbose-logs 看实际请求 URL 与响应体，确认错误来自上游还是代理"],
+      "evidence": "B",
+      "source": "0x801901F7=503 本机官方解码实测（2026-10-20）；502 为同族映射，社区多例一致"
+    },
+    {
+      "code": "0x801901A0",
+      "symbol": "HTTP 状态待核（疑似 416）",
+      "official": "官方 troubleshooting 将其列为常见错误之一，未给场景细节",
+      "symptom": "下载中断/续传相关。",
+      "causes": ["待验证：0x1A0=416（Range Not Satisfiable），疑似断点续传冲突"],
+      "actions": ["清 winget 临时下载目录后重试（%TEMP%\\WinGet）"],
+      "evidence": "C",
+      "source": "learn.microsoft.com troubleshooting『Common errors』列出此码；416 归因是推断，待验证"
+    },
+    {
+      "code": "0x80D03002",
+      "symbol": "Store/Commerce 错误",
+      "official": "官方 troubleshooting 列为常见错误",
+      "symptom": "msstore 源相关失败。",
+      "causes": ["Store 服务/区域/登录态问题（细节待核）"],
+      "actions": ["msstore 源问题建议先试 --source winget 绕过商店源；或 winget source remove msstore"],
+      "evidence": "C",
+      "source": "learn.microsoft.com troubleshooting『Common errors』列出此码；具体含义本库未独立核实"
+    },
+    {
+      "code": "ENV-PROXY",
+      "symbol": "环境问题：代理与 winget 的关系",
+      "official": null,
+      "symptom": "浏览器能下载、winget 不能；或开了代理反而更糟。",
+      "causes": [
+        "winget 走 WinHTTP 栈，遵从 winhttp 代理而非（或不完全遵从）用户级代理/VPN/TUN",
+        "代理对大文件下载不稳定",
+        "SOCKS 代理与 WinHTTP 的兼容性问题"
+      ],
+      "actions": [
+        "netsh winhttp show proxy 看系统级代理到底是什么",
+        "临时方案：netsh winhttp import proxy source=ie（需管理员，改完 netsh winhttp reset proxy 可还原）",
+        "或者绕开：手动下载 + 本地 manifest 安装"
+      ],
+      "evidence": "A",
+      "source": "本机实测 2026-10-18/19：TUN 隧道与 SOCKS5 两种形态下 winget 行为均与预期不符，最终手动下载绕开"
+    },
+    {
+      "code": "ENV-LOCALMANIFEST",
+      "symbol": "环境问题：本地 manifest 安装被拒",
+      "official": null,
+      "symptom": "winget install --manifest 报管理员/设置门槛，未到真正的安装阶段。",
+      "causes": ["LocalManifestFiles 实验功能默认关闭（安全设计：防运行来源不明的 manifest）"],
+      "actions": [
+        "管理员 PowerShell：winget settings --enable LocalManifestFiles",
+        "安全提醒：只对读过的 manifest 开启；用完可 winget settings --disable LocalManifestFiles 关回"
+      ],
+      "evidence": "A",
+      "source": "本机实测 2026-10-18：winget-pkgs PR #455077 本地验证阶段亲历"
+    }
+  ]
+}

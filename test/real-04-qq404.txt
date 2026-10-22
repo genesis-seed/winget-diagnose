@@ -1,0 +1,10 @@
+﻿EXITCODE:-2145844844
+---RAW OUTPUT---
+已找到 腾讯QQ [Tencent.QQ] 版本 9.7.23.29392
+此应用程序由其所有者授权给你。
+Microsoft 对第三方程序包概不负责，也不向第三方程序包授予任何许可证。
+正在下载 https://dldir1v6.qq.com/qqfile/qq/PCQQ9.7.23/QQ9.7.23.29392.exe
+执行此命令时发生意外错误： 
+Download request status is not success.
+0x80190194 : Not found (404).
+
